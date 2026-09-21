@@ -1,0 +1,53 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Note: there is deliberately no `adopted` / `status` column on Bench.
+// A bench's status is derived from its adoptions (see src/lib/availability.ts).
+model Bench {
+  id            String     @id @default(cuid())
+  code          String     @unique // human-facing plaque ID, e.g. "PG-014"
+  zone          String
+  lat           Float?
+  lng           Float?
+  material      String?
+  installedYear Int?
+  notes         String?
+  active        Boolean    @default(true) // false = retired (soft delete)
+  createdAt     DateTime   @default(now())
+  adoptions     Adoption[]
+
+  @@index([zone])
+}
+
+model Donor {
+  id          String     @id @default(cuid())
+  displayName String
+  email       String     @unique // never exposed publicly
+  createdAt   DateTime   @default(now())
+  adoptions   Adoption[]
+}
+
+// A half-open date range [startDate, endDate): endDate is the first day the
+// bench is free again. Overlaps per bench are rejected by an exclusion
+// constraint added by hand in the init migration (Prisma can't express it).
+model Adoption {
+  id          String    @id @default(cuid())
+  benchId     String
+  bench       Bench     @relation(fields: [benchId], references: [id])
+  donorId     String
+  donor       Donor     @relation(fields: [donorId], references: [id])
+  startDate   DateTime  @db.Date
+  endDate     DateTime  @db.Date
+  dedication  String?
+  createdAt   DateTime  @default(now())
+  cancelledAt DateTime?
+
+  @@index([benchId, endDate])
+  @@index([donorId])
+}
