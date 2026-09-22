@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  adoptionPhase,
   EXPIRING_SOON_DAYS,
   findConflict,
   getBenchStatus,
@@ -162,5 +163,17 @@ describe("findConflict", () => {
     expect(
       findConflict(cancelled, { startDate: d("2026-01-01"), endDate: d("2027-01-01") }),
     ).toBeNull();
+  });
+});
+
+describe("adoptionPhase", () => {
+  const asOf = d("2026-09-21");
+  it("classifies relative to asOf, with cancellation taking precedence", () => {
+    expect(adoptionPhase(adoption("2026-01-01", "2027-01-01"), asOf)).toBe("CURRENT");
+    expect(adoptionPhase(adoption("2026-09-22", "2027-01-01"), asOf)).toBe("UPCOMING");
+    expect(adoptionPhase(adoption("2025-01-01", "2026-09-21"), asOf)).toBe("ENDED"); // end exclusive
+    expect(
+      adoptionPhase(adoption("2026-01-01", "2027-01-01", { cancelledAt: new Date() }), asOf),
+    ).toBe("CANCELLED");
   });
 });

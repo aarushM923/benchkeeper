@@ -101,3 +101,13 @@ export function findConflict<A extends AdoptionLike>(
       .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())[0] ?? null
   );
 }
+
+/** Where an individual adoption sits relative to `asOf` (used by the admin views). */
+export type AdoptionPhase = "CURRENT" | "UPCOMING" | "ENDED" | "CANCELLED";
+
+export function adoptionPhase(a: AdoptionLike, asOf: Date): AdoptionPhase {
+  if (a.cancelledAt != null) return "CANCELLED";
+  if (coversDay(a, asOf)) return "CURRENT";
+  if (a.startDate.getTime() > asOf.getTime()) return "UPCOMING";
+  return "ENDED";
+}

@@ -56,8 +56,21 @@ One line + reason each. Numbered 1–8 match SPEC.md §1; the rest came up while
     approximate points near each zone, not survey data.
 16. **Dedication: ≤ 140 chars, trimmed, no URLs.** A light guard sized for a plaque, not a
     moderation system (out of scope, SPEC §11).
-17. **No admin UI in MVP.** Admin is a Phase 3 stretch. Until then, donor emails are collected
-    and stored but shown nowhere — which satisfies decision 6 trivially.
+17. **Admin is demo-grade: one shared password (`ADMIN_PASSWORD`), no staff accounts.** The
+    session cookie is an expiry signed with HMAC-SHA256 keyed by that password (httpOnly,
+    SameSite=Lax, 8 h), so changing the password logs everyone out; unset means admin is
+    disabled, never defaulted. Every admin page, Server Action, and the CSV route checks auth
+    itself, next to the data — a Server Action is a public POST endpoint whatever page renders
+    it. Verified by replaying a captured "cancel" action without the cookie (refused) and with it
+    (applied). Not built: per-user accounts, rate limiting beyond a delay, an audit log.
+21. **Admins cancel, never delete; edits re-run the overlap rules.** Moving an end date goes
+    through the same app check + exclusion constraint as adopting. Retiring a bench is refused
+    while it has current or upcoming adoptions, so no donor silently loses a bench.
+22. **No public "my benches" page — it's in admin instead.** Without donor accounts (a
+    non-goal), a lookup by email would reveal who adopted what to anyone who knows an email.
+23. **CSV export guards against formula injection.** Names and dedications are visitor-typed;
+    a cell starting with `=`, `+`, `-`, or `@` is prefixed with `'` so it can't execute when staff
+    open the file in Excel or Sheets.
 18. **The adopt form is a Server Action with `useActionState`.** With JavaScript, errors show
     inline and typed values are kept; without it, the same form still submits (progressive
     enhancement). Everything is re-validated on the server, and the start date is always the

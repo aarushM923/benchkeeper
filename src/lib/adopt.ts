@@ -40,7 +40,7 @@ export type ValidationResult =
   | { ok: true; value: AdoptionRequest }
   | { ok: false; errors: Partial<Record<AdoptionField, string>> };
 
-function clean(v: unknown): string {
+export function clean(v: unknown): string {
   return typeof v === "string"
     ? v.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim()
     : "";
@@ -49,6 +49,14 @@ function clean(v: unknown): string {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // A light guard, not moderation (SPEC §11): plaques shouldn't carry links.
 const URL_RE = /(https?:\/\/|www\.|\b[a-z0-9-]+\.(com|net|org|io|co|xyz|info|biz)\b)/i;
+
+/** Shared by the public form and admin edits. Expects already-cleaned text. */
+export function checkDedication(text: string): string | null {
+  if (text.length > DEDICATION_MAX)
+    return `Dedications are limited to ${DEDICATION_MAX} characters (plaque size).`;
+  if (URL_RE.test(text)) return "Dedications can't include web addresses.";
+  return null;
+}
 
 export function validateAdoption(input: {
   displayName?: unknown;
@@ -68,10 +76,8 @@ export function validateAdoption(input: {
     errors.email = "Please enter a valid email address.";
 
   const dedicationText = clean(input.dedication);
-  if (dedicationText.length > DEDICATION_MAX)
-    errors.dedication = `Dedications are limited to ${DEDICATION_MAX} characters (plaque size).`;
-  else if (URL_RE.test(dedicationText))
-    errors.dedication = "Dedications can't include web addresses.";
+  const dedicationError = checkDedication(dedicationText);
+  if (dedicationError) errors.dedication = dedicationError;
 
   const months = Number(clean(input.months));
   if (!Number.isInteger(months) || months < MIN_MONTHS || months > MAX_MONTHS)
@@ -89,7 +95,7 @@ export type AdoptResult =
   | { ok: false; reason: "NOT_FOUND" | "CONFLICT"; message: string };
 
 /** Postgres exclusion-constraint violation from our no-overlap constraint. */
-function isOverlapViolation(err: unknown): boolean {
+export function isOverlapViolation(err: unknown): boolean {
   const seen = new Set<unknown>();
   let e: unknown = err;
   // Prisma wraps driver errors; walk the cause chain looking for 23P01.
@@ -175,7 +181,7 @@ export async function createAdoption(
   }
 }
 
-function conflictMessage(
+export function conflictMessage(
   code: string,
   conflict: { startDate: Date; endDate: Date },
   startDate: Date,
