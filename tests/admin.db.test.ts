@@ -38,8 +38,8 @@ describe.skipIf(!TEST_DATABASE_URL)("admin operations", () => {
 
   /** Current adoption [today, +12mo) followed by a reservation [+12mo, +24mo). */
   async function currentPlusRenewal() {
-    await createAdoption(db, "PG-001", req(1), today);
-    await createAdoption(db, "PG-001", req(2), parseDay("2027-09-22"));
+    await createAdoption(db, "PG-001", { ...req(1), startDate: today });
+    await createAdoption(db, "PG-001", { ...req(2), startDate: parseDay("2027-09-22") });
     return db.adoption.findMany({ orderBy: { startDate: "asc" } });
   }
 
@@ -72,19 +72,19 @@ describe.skipIf(!TEST_DATABASE_URL)("admin operations", () => {
   });
 
   it("cancelling frees the bench and allows a new adoption", async () => {
-    await createAdoption(db, "PG-001", req(1, 60), today);
+    await createAdoption(db, "PG-001", { ...req(1, 60), startDate: today });
     const a = await db.adoption.findFirstOrThrow();
     expect(await cancelAdoption(db, a.id)).toEqual({ ok: true });
     expect((await cancelAdoption(db, a.id)).ok).toBe(false); // idempotent refusal
 
     const all = await db.adoption.findMany();
     expect(getBenchStatus(all, today).kind).toBe("AVAILABLE");
-    expect((await createAdoption(db, "PG-001", req(2), today)).ok).toBe(true);
+    expect((await createAdoption(db, "PG-001", { ...req(2), startDate: today })).ok).toBe(true);
     expect(await db.adoption.count()).toBe(2); // history kept
   });
 
   it("retiring is refused while a bench has a current or upcoming adoption", async () => {
-    await createAdoption(db, "PG-001", req(1), parseDay("2027-01-01")); // upcoming
+    await createAdoption(db, "PG-001", { ...req(1), startDate: parseDay("2027-01-01") }); // upcoming
     const r = await setBenchActive(db, "PG-001", false, today);
     expect(r.ok).toBe(false);
     await db.adoption.updateMany({ data: { cancelledAt: new Date() } });
@@ -101,11 +101,11 @@ describe.skipIf(!TEST_DATABASE_URL)("admin operations", () => {
   });
 
   it("the phase filter agrees with adoptionPhase()", async () => {
-    await createAdoption(db, "PG-001", req(1), addDays(today, -400)); // ended
-    await createAdoption(db, "PG-001", req(2), today); // current
-    await createAdoption(db, "PG-001", req(3), parseDay("2027-09-22")); // upcoming
+    await createAdoption(db, "PG-001", { ...req(1), startDate: addDays(today, -400) }); // ended
+    await createAdoption(db, "PG-001", { ...req(2), startDate: today }); // current
+    await createAdoption(db, "PG-001", { ...req(3), startDate: parseDay("2027-09-22") }); // upcoming
     await db.bench.create({ data: { code: "PG-002", zone: "Parade Ground" } });
-    await createAdoption(db, "PG-002", req(4), today);
+    await createAdoption(db, "PG-002", { ...req(4), startDate: today });
     await db.adoption.updateMany({ where: { donor: { email: "d4@example.com" } }, data: { cancelledAt: new Date() } });
 
     const all = await db.adoption.findMany();

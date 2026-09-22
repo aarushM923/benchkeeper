@@ -14,9 +14,9 @@ One line + reason each. Numbered 1–8 match SPEC.md §1; the rest came up while
 3. **Lightweight `Donor` entity (displayName, email), matched by email.** One person can adopt
    several benches or renew; a repeat email updates the display name rather than creating a
    duplicate donor.
-4. **Adoptions start today; duration is 1, 2, or 5 years.** Stored as a real `[start, end)`
-   range so advance reservations are a UI change, not a schema change. Server accepts any
-   1–120 months so the API isn't coupled to the form's options.
+4. **Adoptions start today by default; duration is 1, 2, or 5 years.** Stored as a real
+   `[start, end)` range, which paid off: advance reservations (Phase 3) needed no schema change.
+   Server accepts any 1–120 months so the API isn't coupled to the form's options.
 5. **Instant self-serve adoption, no approval step.** Matches the brief ("adopt a bench
    themselves").
 6. **Public sees display name, dedication, and period; email is never public.** Enforced at the
@@ -80,3 +80,8 @@ One line + reason each. Numbered 1–8 match SPEC.md §1; the rest came up while
     Snapshotting the name per adoption is the alternative if plaques must never change.
 20. **Stack pins: Next.js 16, Prisma 7.10 (stable).** npm's `latest` tag for `prisma` pointed at
     an 8.0 release candidate; I pinned the stable 7.x line that matches `@prisma/client`.
+24. **Advance reservations: up to 365 days ahead, suggested from the "next open start".** The
+    form defaults to the day after the bench's last booking ends — a start that can't conflict —
+    which makes renewals back-to-back via the half-open ranges. Gaps between bookings are
+    ignored for the suggestion; a visitor can still pick a date in one and the overlap check
+    decides. The one-year cap keeps the calendar from filling years out.

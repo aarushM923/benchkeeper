@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { DEDICATION_MAX, validateAdoption } from "@/lib/adopt";
+import { DEDICATION_MAX, MAX_LEAD_DAYS, validateAdoption as validate } from "@/lib/adopt";
+import { addDays, formatDay, parseDay } from "@/lib/dates";
+
+const today = parseDay("2026-09-22");
+const validateAdoption = (input: Parameters<typeof validate>[0]) => validate(input, today);
 
 const good = {
   displayName: "  The Rivera   Family ",
@@ -17,6 +21,7 @@ describe("validateAdoption", () => {
         email: "maria.rivera@example.com",
         dedication: "Rest here, neighbor.",
         months: 24,
+        startDate: today, // omitted start date means today
       },
     });
   });
@@ -55,5 +60,27 @@ describe("validateAdoption", () => {
     for (const months of ["0", "121", "1.5", "-12", "", "abc", undefined]) {
       expect(validateAdoption({ ...good, months }).ok).toBe(false);
     }
+  });
+
+  describe("start date (advance reservations)", () => {
+    it("accepts today through MAX_LEAD_DAYS ahead", () => {
+      for (const day of [today, addDays(today, 1), addDays(today, MAX_LEAD_DAYS)]) {
+        const r = validateAdoption({ ...good, startDate: formatDay(day) });
+        expect(r.ok && r.value.startDate).toEqual(day);
+      }
+    });
+
+    it("rejects past dates, dates too far ahead, and malformed dates", () => {
+      for (const startDate of [
+        formatDay(addDays(today, -1)),
+        formatDay(addDays(today, MAX_LEAD_DAYS + 1)),
+        "2026-02-30",
+        "next tuesday",
+      ]) {
+        const r = validateAdoption({ ...good, startDate });
+        expect(r.ok, startDate).toBe(false);
+        if (!r.ok) expect(Object.keys(r.errors)).toEqual(["startDate"]);
+      }
+    });
   });
 });

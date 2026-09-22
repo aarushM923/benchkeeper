@@ -10,7 +10,7 @@ import { TEST_DATABASE_URL, testDb, wipe } from "./db-helpers";
 
 const today = parseDay("2026-09-22");
 
-const request = (n = 1, months = 12): AdoptionRequest => ({
+const request = (n = 1, months = 12): Omit<AdoptionRequest, "startDate"> => ({
   displayName: `Donor ${n}`,
   email: `donor${n}@example.com`,
   dedication: null,
@@ -34,7 +34,7 @@ describe.skipIf(!TEST_DATABASE_URL)("createAdoption", () => {
     db.adoption.findMany({ where: { cancelledAt: null }, orderBy: { startDate: "asc" } });
 
   it("adopts an available bench for [today, today + months)", async () => {
-    const r = await createAdoption(db, "PG-001", request(1, 24), today);
+    const r = await createAdoption(db, "PG-001", { ...request(1, 24), startDate: today });
     expect(r).toEqual({ ok: true, startDate: today, endDate: parseDay("2028-09-22") });
     const [a] = await liveAdoptions();
     expect(a.startDate).toEqual(today);
@@ -42,8 +42,8 @@ describe.skipIf(!TEST_DATABASE_URL)("createAdoption", () => {
   });
 
   it("rejects an overlapping adoption with a specific message", async () => {
-    await createAdoption(db, "PG-001", request(1, 24), today);
-    const r = await createAdoption(db, "PG-001", request(2, 12), today);
+    await createAdoption(db, "PG-001", { ...request(1, 24), startDate: today });
+    const r = await createAdoption(db, "PG-001", { ...request(2, 12), startDate: today });
     expect(r).toEqual({
       ok: false,
       reason: "CONFLICT",
@@ -63,36 +63,36 @@ describe.skipIf(!TEST_DATABASE_URL)("createAdoption", () => {
         endDate: parseDay("2028-01-15"),
       },
     });
-    const r = await createAdoption(db, "PG-001", request(2, 12), today);
+    const r = await createAdoption(db, "PG-001", { ...request(2, 12), startDate: today });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.message).toMatch(/reserved starting Jan 15, 2027/);
   });
 
   it("allows a new adoption to start the day the previous one ends (half-open)", async () => {
-    await createAdoption(db, "PG-001", request(1, 12), today);
-    const r = await createAdoption(db, "PG-001", request(2, 12), parseDay("2027-09-22"));
+    await createAdoption(db, "PG-001", { ...request(1, 12), startDate: today });
+    const r = await createAdoption(db, "PG-001", { ...request(2, 12), startDate: parseDay("2027-09-22") });
     expect(r.ok).toBe(true);
     expect(await liveAdoptions()).toHaveLength(2);
   });
 
   it("ignores cancelled adoptions", async () => {
-    await createAdoption(db, "PG-001", request(1, 60), today);
+    await createAdoption(db, "PG-001", { ...request(1, 60), startDate: today });
     await db.adoption.updateMany({ data: { cancelledAt: new Date() } });
-    expect((await createAdoption(db, "PG-001", request(2, 12), today)).ok).toBe(true);
+    expect((await createAdoption(db, "PG-001", { ...request(2, 12), startDate: today })).ok).toBe(true);
   });
 
   it("refuses unknown and retired benches", async () => {
     await db.bench.update({ where: { code: "PG-001" }, data: { active: false } });
     for (const code of ["PG-001", "NOPE-999"]) {
-      const r = await createAdoption(db, code, request(), today);
+      const r = await createAdoption(db, code, { ...request(), startDate: today });
       expect(r.ok === false && r.reason).toBe("NOT_FOUND");
     }
   });
 
   it("reuses the donor for a repeat email and updates their display name", async () => {
     await db.bench.create({ data: { code: "PG-002", zone: "Parade Ground" } });
-    await createAdoption(db, "PG-001", { ...request(1), displayName: "Maria R." }, today);
-    await createAdoption(db, "PG-002", { ...request(1), displayName: "Maria Rivera" }, today);
+    await createAdoption(db, "PG-001", { ...request(1), displayName: "Maria R.", startDate: today });
+    await createAdoption(db, "PG-002", { ...request(1), displayName: "Maria Rivera", startDate: today });
     const donors = await db.donor.findMany();
     expect(donors).toHaveLength(1);
     expect(donors[0].displayName).toBe("Maria Rivera");
@@ -100,7 +100,7 @@ describe.skipIf(!TEST_DATABASE_URL)("createAdoption", () => {
   });
 
   it("the database rejects an overlap even when the app check is bypassed", async () => {
-    await createAdoption(db, "PG-001", request(1, 12), today);
+    await createAdoption(db, "PG-001", { ...request(1, 12), startDate: today });
     const bench = await db.bench.findUniqueOrThrow({ where: { code: "PG-001" } });
     const donor = await db.donor.findFirstOrThrow();
     await expect(
@@ -121,7 +121,7 @@ describe.skipIf(!TEST_DATABASE_URL)("createAdoption", () => {
   // app-level findConflict() check — only the database stopped them.
   it("concurrent submissions for the same bench: exactly one wins", async () => {
     const results = await Promise.all(
-      Array.from({ length: 8 }, (_, i) => createAdoption(db, "PG-001", request(i + 1), today)),
+      Array.from({ length: 8 }, (_, i) => createAdoption(db, "PG-001", { ...request(i + 1), startDate: today })),
     );
     const winners = results.filter((r) => r.ok);
     const losers = results.filter((r) => !r.ok);

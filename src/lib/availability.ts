@@ -111,3 +111,17 @@ export function adoptionPhase(a: AdoptionLike, asOf: Date): AdoptionPhase {
   if (a.startDate.getTime() > asOf.getTime()) return "UPCOMING";
   return "ENDED";
 }
+
+/**
+ * The earliest day a new adoption of any length can start without touching an
+ * existing one: the day after the last live adoption ends, or asOf if nothing
+ * is booked. (Gaps between bookings are ignored on purpose — the overlap check
+ * still decides if a visitor picks a date inside one.)
+ */
+export function nextOpenStart(adoptions: readonly AdoptionLike[], asOf: Date): Date {
+  let open = asOf.getTime();
+  for (const a of adoptions) {
+    if (isLive(a) && a.endDate.getTime() > open) open = a.endDate.getTime();
+  }
+  return new Date(open);
+}

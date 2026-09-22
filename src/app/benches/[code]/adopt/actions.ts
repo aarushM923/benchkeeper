@@ -15,8 +15,8 @@ export interface AdoptFormState {
 
 /**
  * Server Action behind the adopt form. Everything is re-validated here — the
- * form's own constraints are a convenience, not a guarantee — and the start
- * date is always the server's "today", never anything from the client.
+ * form's own constraints are a convenience, not a guarantee. The visitor may
+ * pick a start date, but it is bounds-checked against the server's "today".
  */
 export async function adoptBench(
   benchCode: string,
@@ -28,13 +28,16 @@ export async function adoptBench(
     email: String(formData.get("email") ?? ""),
     dedication: String(formData.get("dedication") ?? ""),
     months: String(formData.get("months") ?? ""),
+    startDate: String(formData.get("startDate") ?? ""),
   };
 
-  const validated = validateAdoption(raw);
+  const now = today();
+  const validated = validateAdoption(raw, now);
   if (!validated.ok) return { errors: validated.errors, values: raw };
 
-  const result = await createAdoption(prisma, benchCode, validated.value, today());
+  const result = await createAdoption(prisma, benchCode, validated.value);
   if (!result.ok) return { message: result.message, values: raw };
 
-  redirect(`/benches/${encodeURIComponent(benchCode)}?adopted=1`);
+  const booked = result.startDate.getTime() > now.getTime() ? "reserved" : "adopted";
+  redirect(`/benches/${encodeURIComponent(benchCode)}?${booked}=1`);
 }

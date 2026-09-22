@@ -6,7 +6,7 @@
 // this function builds its output field-by-field — never by spreading a DB row —
 // so a column added later can't leak by accident.
 
-import { getBenchStatus, type AdoptionLike } from "./availability";
+import { getBenchStatus, nextOpenStart, type AdoptionLike } from "./availability";
 import { formatDay, lastCoveredDay } from "./dates";
 
 export interface PublicAdoption {
@@ -32,6 +32,8 @@ export interface PublicBench {
   status: PublicStatus;
   /** Booked adoptions after the current one (e.g. a queued renewal). */
   upcoming: PublicAdoption[];
+  /** YYYY-MM-DD: earliest start that can't conflict (asOf if free). */
+  nextOpenStart: string;
 }
 
 /** What a public query must load for toPublicBench (see PUBLIC_BENCH_SELECT). */
@@ -100,5 +102,6 @@ export function toPublicBench(bench: BenchForPublic, asOf: Date): PublicBench {
     lng: bench.lng,
     status: publicStatus,
     upcoming,
+    nextOpenStart: formatDay(nextOpenStart(bench.adoptions, asOf)),
   };
 }

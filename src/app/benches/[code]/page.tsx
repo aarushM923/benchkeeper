@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getPublicBench } from "@/lib/benches";
-import { displayDay, parseDay } from "@/lib/dates";
+import { MAX_LEAD_DAYS } from "@/lib/adopt";
+import { daysBetween, displayDay, parseDay } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { parseAsOf } from "@/lib/params";
 import type { PublicAdoption } from "@/lib/public";
@@ -43,6 +44,10 @@ export default async function BenchPage(props: PageProps<"/benches/[code]">) {
 
   const { status } = bench;
   const adopted = sp.adopted === "1";
+  const reserved = sp.reserved === "1";
+  const openFrom = parseDay(bench.nextOpenStart);
+  const canReserve =
+    !custom && status.kind !== "AVAILABLE" && daysBetween(asOf, openFrom) <= MAX_LEAD_DAYS;
 
   return (
     <div className="space-y-6">
@@ -53,6 +58,11 @@ export default async function BenchPage(props: PageProps<"/benches/[code]">) {
       {adopted && (
         <p className="rounded border border-green-300 bg-green-50 px-3 py-2 text-green-900">
           Thank you! Bench {bench.code} is now adopted.
+        </p>
+      )}
+      {reserved && (
+        <p className="rounded border border-green-300 bg-green-50 px-3 py-2 text-green-900">
+          Thank you! Your reservation of bench {bench.code} is booked.
         </p>
       )}
       {custom && (
@@ -80,8 +90,10 @@ export default async function BenchPage(props: PageProps<"/benches/[code]">) {
             <AdoptionCard a={status.adoption} title="Adopted by" />
             {status.expiringSoon && (
               <p className="mt-4 text-sm text-orange-800">
-                This adoption ends soon — the bench becomes available on{" "}
-                {displayDay(parseDay(status.adoption.endDate))}.
+                This adoption ends soon
+                {bench.nextOpenStart === status.adoption.endDate
+                  ? ` — the bench becomes available on ${displayDay(parseDay(status.adoption.endDate))}.`
+                  : ", but the bench is already reserved after that."}
               </p>
             )}
           </>
@@ -114,6 +126,20 @@ export default async function BenchPage(props: PageProps<"/benches/[code]">) {
           </div>
         )}
       </section>
+
+      {canReserve && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-stone-200 bg-white p-4">
+          <p className="text-stone-700">
+            Want this bench next? It&apos;s free from <strong>{displayDay(openFrom)}</strong>.
+          </p>
+          <Link
+            href={`/benches/${bench.code}/adopt`}
+            className="rounded border border-green-800 px-4 py-2 text-sm font-medium text-green-900 hover:bg-green-50"
+          >
+            Reserve from {displayDay(openFrom)}
+          </Link>
+        </div>
+      )}
 
       {bench.upcoming.length > 0 && (
         <section className="space-y-2">

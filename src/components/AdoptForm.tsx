@@ -2,8 +2,8 @@
 
 import { useActionState, useState } from "react";
 import type { AdoptFormState } from "@/app/benches/[code]/adopt/actions";
-import { DEDICATION_MAX, DURATION_OPTIONS, NAME_MAX } from "@/lib/adopt";
-import { addMonths, displayDay, lastCoveredDay, parseDay } from "@/lib/dates";
+import { DEDICATION_MAX, DURATION_OPTIONS, MAX_LEAD_DAYS, NAME_MAX } from "@/lib/adopt";
+import { addDays, addMonths, displayDay, formatDay, lastCoveredDay, parseDay } from "@/lib/dates";
 
 type Action = (prev: AdoptFormState, formData: FormData) => Promise<AdoptFormState>;
 
@@ -17,14 +17,30 @@ function FieldError({ id, text }: { id: string; text?: string }) {
   ) : null;
 }
 
-export function AdoptForm({ action, today }: { action: Action; today: string }) {
+export function AdoptForm({
+  action,
+  today,
+  suggestedStart,
+}: {
+  action: Action;
+  today: string;
+  /** The first day that can't conflict — today if the bench is free. */
+  suggestedStart: string;
+}) {
   const [state, formAction, pending] = useActionState(action, {});
   const v = state.values;
   const e = state.errors ?? {};
   const [months, setMonths] = useState(v?.months ?? "12");
   const [dedication, setDedication] = useState(v?.dedication ?? "");
+  const [startText, setStartText] = useState(v?.startDate || suggestedStart);
 
-  const start = parseDay(today);
+  let start = parseDay(suggestedStart);
+  try {
+    start = parseDay(startText);
+  } catch {
+    // Keep the suggestion while the visitor is mid-edit; the server validates.
+  }
+  const startsToday = formatDay(start) === today;
   const through = displayDay(lastCoveredDay(addMonths(start, Number(months) || 12)));
 
   return (
@@ -96,6 +112,28 @@ export function AdoptForm({ action, today }: { action: Action; today: string }) 
         <FieldError id="dedication-error" text={e.dedication} />
       </div>
 
+      <div className="space-y-1">
+        <label htmlFor="startDate" className="font-medium">
+          Start date
+        </label>
+        <p className="text-sm text-stone-500">
+          Start today, or book ahead (up to a year) to reserve the bench.
+        </p>
+        <input
+          id="startDate"
+          name="startDate"
+          type="date"
+          min={today}
+          max={formatDay(addDays(parseDay(today), MAX_LEAD_DAYS))}
+          value={startText}
+          onChange={(ev) => setStartText(ev.target.value)}
+          aria-invalid={Boolean(e.startDate)}
+          aria-describedby="startDate-error"
+          className="rounded border border-stone-300 px-3 py-2 aria-[invalid=true]:border-red-600"
+        />
+        <FieldError id="startDate-error" text={e.startDate} />
+      </div>
+
       <fieldset className="space-y-2">
         <legend className="font-medium">Adoption length</legend>
         <div className="flex flex-wrap gap-2">
@@ -116,7 +154,8 @@ export function AdoptForm({ action, today }: { action: Action; today: string }) 
           ))}
         </div>
         <p className="text-sm text-stone-600">
-          Starts today ({displayDay(start)}) and runs through <strong>{through}</strong>.
+          Starts {startsToday ? `today (${displayDay(start)})` : displayDay(start)} and runs
+          through <strong>{through}</strong>.
         </p>
         <FieldError id="months-error" text={e.months} />
       </fieldset>
@@ -125,7 +164,7 @@ export function AdoptForm({ action, today }: { action: Action; today: string }) 
         disabled={pending}
         className="rounded bg-green-800 px-5 py-2.5 font-medium text-white hover:bg-green-900 disabled:opacity-60"
       >
-        {pending ? "Adopting…" : "Adopt this bench"}
+        {pending ? "Saving…" : startsToday ? "Adopt this bench" : "Reserve this bench"}
       </button>
       <p className="text-xs text-stone-500">No payment is taken.</p>
     </form>

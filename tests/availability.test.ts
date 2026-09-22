@@ -4,6 +4,7 @@ import {
   EXPIRING_SOON_DAYS,
   findConflict,
   getBenchStatus,
+  nextOpenStart,
   rangesOverlap,
   type AdoptionLike,
 } from "@/lib/availability";
@@ -175,5 +176,31 @@ describe("adoptionPhase", () => {
     expect(
       adoptionPhase(adoption("2026-01-01", "2027-01-01", { cancelledAt: new Date() }), asOf),
     ).toBe("CANCELLED");
+  });
+});
+
+describe("nextOpenStart", () => {
+  const asOf = d("2026-09-22");
+  it("is asOf when nothing is booked (or only past/cancelled adoptions)", () => {
+    expect(nextOpenStart([], asOf)).toEqual(asOf);
+    expect(nextOpenStart([adoption("2020-01-01", "2021-01-01")], asOf)).toEqual(asOf);
+    expect(
+      nextOpenStart([adoption("2026-01-01", "2030-01-01", { cancelledAt: new Date() })], asOf),
+    ).toEqual(asOf);
+  });
+
+  it("is the end of the last live booking — current or upcoming", () => {
+    expect(nextOpenStart([adoption("2026-01-01", "2027-03-01")], asOf)).toEqual(d("2027-03-01"));
+    expect(
+      nextOpenStart([adoption("2026-01-01", "2027-03-01"), adoption("2027-03-01", "2029-03-01")], asOf),
+    ).toEqual(d("2029-03-01"));
+    // Reserved (free now): a start today would run into the reservation.
+    expect(nextOpenStart([adoption("2026-11-01", "2027-11-01")], asOf)).toEqual(d("2027-11-01"));
+  });
+
+  it("starting there never conflicts, whatever the length", () => {
+    const booked = [adoption("2026-01-01", "2027-03-01"), adoption("2027-06-01", "2028-06-01")];
+    const start = nextOpenStart(booked, asOf);
+    expect(findConflict(booked, { startDate: start, endDate: d("2040-01-01") })).toBeNull();
   });
 });

@@ -11,7 +11,7 @@
 
 import type { PrismaClient } from "@/generated/prisma/client";
 import { findConflict } from "./availability";
-import { addMonths, displayDay, lastCoveredDay } from "./dates";
+import { addDays, addMonths, displayDay, lastCoveredDay, parseDay } from "./dates";
 
 /** Durations offered in the form, in months (DECISIONS #4). */
 export const DURATION_OPTIONS = [
@@ -24,6 +24,9 @@ export const DURATION_OPTIONS = [
 export const MIN_MONTHS = 1;
 export const MAX_MONTHS = 120;
 
+/** How far ahead a visitor may book (advance reservations / renewals). */
+export const MAX_LEAD_DAYS = 365;
+
 export const NAME_MAX = 80;
 export const DEDICATION_MAX = 140;
 
@@ -32,6 +35,7 @@ export interface AdoptionRequest {
   email: string;
   dedication: string | null;
   months: number;
+  startDate: Date;
 }
 
 export type AdoptionField = keyof AdoptionRequest;
@@ -58,12 +62,20 @@ export function checkDedication(text: string): string | null {
   return null;
 }
 
-export function validateAdoption(input: {
-  displayName?: unknown;
-  email?: unknown;
-  dedication?: unknown;
-  months?: unknown;
-}): ValidationResult {
+/**
+ * `today` is the server's park-local date. The start date defaults to today;
+ * a later one (up to MAX_LEAD_DAYS ahead) makes an advance reservation.
+ */
+export function validateAdoption(
+  input: {
+    displayName?: unknown;
+    email?: unknown;
+    dedication?: unknown;
+    months?: unknown;
+    startDate?: unknown;
+  },
+  today: Date,
+): ValidationResult {
   const errors: Partial<Record<AdoptionField, string>> = {};
 
   const displayName = clean(input.displayName);
@@ -83,10 +95,25 @@ export function validateAdoption(input: {
   if (!Number.isInteger(months) || months < MIN_MONTHS || months > MAX_MONTHS)
     errors.months = "Please choose an adoption length.";
 
+  const startText = clean(input.startDate);
+  let startDate = today;
+  if (startText) {
+    try {
+      startDate = parseDay(startText);
+    } catch {
+      errors.startDate = "Please enter a valid start date.";
+    }
+    const latest = addDays(today, MAX_LEAD_DAYS);
+    if (!errors.startDate && startDate.getTime() < today.getTime())
+      errors.startDate = "The start date can't be in the past.";
+    else if (!errors.startDate && startDate.getTime() > latest.getTime())
+      errors.startDate = `Adoptions can be booked up to a year ahead (by ${displayDay(latest)}).`;
+  }
+
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return {
     ok: true,
-    value: { displayName, email, dedication: dedicationText || null, months },
+    value: { displayName, email, dedication: dedicationText || null, months, startDate },
   };
 }
 
@@ -115,15 +142,16 @@ export function isOverlapViolation(err: unknown): boolean {
 }
 
 /**
- * Adopt `benchCode` starting `startDate` (today, in the MVP) for
- * `request.months`. Never trusts client-supplied dates.
+ * Adopt `benchCode` for [request.startDate, + request.months). The start date
+ * has already been bounds-checked by validateAdoption() against the server's
+ * today; overlap is checked here.
  */
 export async function createAdoption(
   db: PrismaClient,
   benchCode: string,
   request: AdoptionRequest,
-  startDate: Date,
 ): Promise<AdoptResult> {
+  const { startDate } = request;
   const endDate = addMonths(startDate, request.months);
 
   try {
