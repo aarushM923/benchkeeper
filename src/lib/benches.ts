@@ -158,3 +158,35 @@ export async function listZones(db: PrismaClient): Promise<string[]> {
   });
   return rows.map((r) => r.zone);
 }
+
+export interface BenchPin {
+  code: string;
+  zone: string;
+  lat: number;
+  lng: number;
+  kind: PublicBench["status"]["kind"];
+  summary: string;
+}
+
+/**
+ * Every active bench with coordinates, for the map. Same public projection as
+ * the list (so still no email); only ~500 small rows, so no pagination.
+ */
+export async function listBenchPins(db: PrismaClient, asOf: Date): Promise<BenchPin[]> {
+  const rows = await db.bench.findMany({
+    where: { active: true, lat: { not: null }, lng: { not: null } },
+    select: publicBenchSelect(asOf),
+    orderBy: { code: "asc" },
+  });
+  return rows.map((row) => {
+    const b = toPublicBench(row, asOf);
+    const s = b.status;
+    const summary =
+      s.kind === "AVAILABLE"
+        ? "Available to adopt"
+        : s.kind === "ADOPTED"
+          ? `Adopted by ${s.adoption.displayName} through ${s.adoption.lastDay}`
+          : `Reserved from ${s.adoption.startDate} by ${s.adoption.displayName}`;
+    return { code: b.code, zone: b.zone, lat: b.lat!, lng: b.lng!, kind: s.kind, summary };
+  });
+}

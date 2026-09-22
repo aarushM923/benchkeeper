@@ -22,9 +22,10 @@ One line + reason each. Numbered 1–8 match SPEC.md §1; the rest came up while
 6. **Public sees display name, dedication, and period; email is never public.** Enforced at the
    query (`donor: { select: { displayName } }`) *and* at a single projection function
    (`toPublicBench`) that every page and API route goes through — not by hiding it in the UI.
-7. **No map in MVP; list + search + filter + pagination.** 500 benches are found faster by
-   code/zone search than by panning. Seed still includes approximate lat/lng so a map is a
-   drop-in later.
+7. **Map was not MVP; list + search + filter + pagination is the core.** 500 benches are found
+   faster by code/zone search than by panning. Because the seed already had approximate
+   lat/lng, the map (Leaflet + OpenStreetMap, no API key) was a small Phase 3 add. Pins are
+   synthetic points near each zone, and the page says so.
 8. **Postgres for dev and prod (Neon in prod), via Prisma.** SQLite doesn't persist on Vercel's
    serverless filesystem, and one engine means no dev/prod provider swap.
 
